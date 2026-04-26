@@ -85,7 +85,7 @@ st.markdown(
 # =============================
 # ENCABEZADO
 # =============================
-st.markdown('<div class="main-title">Risk Analytics App</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">ANÁLISIS DE LA ACCIÓN</div>', unsafe_allow_html=True)
 st.markdown(
     '<div class="subtitle">Aplicación para análisis de rendimientos, medidas de riesgo, VaR, CVaR y volatilidad.</div>',
     unsafe_allow_html=True
