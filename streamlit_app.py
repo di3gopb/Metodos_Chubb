@@ -97,19 +97,31 @@ st.markdown(
 # =============================
 @st.cache_data
 def descargar_datos(ticker):
-    df_5y = yf.download(ticker, period="5y", auto_adjust=True, progress=False)
-    df_1d = yf.download(ticker, period="1d", interval="5m", auto_adjust=True, progress=False)
+    df_historico = yf.download(
+        ticker,
+        start="2010-01-01",
+        auto_adjust=True,
+        progress=False
+    )
 
-    if hasattr(df_5y.columns, "nlevels") and df_5y.columns.nlevels > 1:
-        df_5y.columns = df_5y.columns.get_level_values(0)
+    df_1d = yf.download(
+        ticker,
+        period="1d",
+        interval="5m",
+        auto_adjust=True,
+        progress=False
+    )
+
+    if hasattr(df_historico.columns, "nlevels") and df_historico.columns.nlevels > 1:
+        df_historico.columns = df_historico.columns.get_level_values(0)
 
     if hasattr(df_1d.columns, "nlevels") and df_1d.columns.nlevels > 1:
         df_1d.columns = df_1d.columns.get_level_values(0)
 
-    precios = df_5y["Close"].dropna()
+    precios = df_historico["Close"].dropna()
     rendimientos = precios.pct_change().dropna()
 
-    return df_5y, df_1d, precios, rendimientos
+    return df_historico, df_1d, precios, rendimientos
 
 
 def crear_figura_base():
@@ -293,22 +305,8 @@ elif seccion == "VaR y CVaR - Métodos Generales":
     var_par_t_995 = stats.t.ppf(1 - 0.995, gl, loc=media_rend, scale=desviacion_rend)
 
     tabla_var_general = pd.DataFrame({
-        "Método": [
-            "Normal",
-            "Normal",
-            "Normal",
-            "T-Student",
-            "T-Student",
-            "T-Student"
-        ],
-        "Nivel de confianza": [
-            "95%",
-            "99%",
-            "99.5%",
-            "95%",
-            "99%",
-            "99.5%"
-        ],
+        "Método": ["Normal", "Normal", "Normal", "T-Student", "T-Student", "T-Student"],
+        "Nivel de confianza": ["95%", "99%", "99.5%", "95%", "99%", "99.5%"],
         "VaR": [
             var_par_n_95,
             var_par_n_99,
