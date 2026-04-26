@@ -67,25 +67,45 @@ st.markdown(
         color: #8ECDF8;
     }
 
-    .section-card {
-        background-color: #151C26;
-        padding: 25px;
-        border-radius: 16px;
-        border: 1px solid #263241;
-        margin-top: 20px;
-        margin-bottom: 20px;
-    }
-
     .section-title {
         font-size: 32px;
         font-weight: 800;
         color: #F8FAFC;
-        margin-bottom: 10px;
+        margin-bottom: 14px;
+    }
+
+    .section-card {
+        background-color: #151C26;
+        padding: 24px;
+        border-radius: 16px;
+        border: 1px solid #263241;
+        margin-top: 16px;
+        margin-bottom: 22px;
     }
 
     .section-text {
         color: #CBD5E1;
         font-size: 16px;
+    }
+
+    .stDataFrame {
+        background-color: #151C26;
+        border-radius: 14px;
+    }
+
+    div[data-testid="stMetric"] {
+        background-color: #151C26;
+        border: 1px solid #263241;
+        padding: 18px;
+        border-radius: 16px;
+    }
+
+    div[data-testid="stMetricLabel"] {
+        color: #94A3B8;
+    }
+
+    div[data-testid="stMetricValue"] {
+        color: #F8FAFC;
     }
     </style>
     """,
@@ -124,17 +144,61 @@ def descargar_datos(ticker):
     return df_historico, df_1d, precios, rendimientos
 
 
-def crear_figura_base():
-    fig, ax = plt.subplots(figsize=(14, 6))
+def crear_figura_base(figsize=(14, 6)):
+    fig, ax = plt.subplots(figsize=figsize)
+
     fig.patch.set_facecolor("#11161C")
     ax.set_facecolor("#11161C")
-    ax.tick_params(colors="#CBD5E1")
+
+    ax.tick_params(colors="#CBD5E1", labelsize=10)
+
     ax.spines["bottom"].set_color("#334155")
     ax.spines["left"].set_color("#334155")
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    ax.grid(alpha=0.15)
+
+    ax.grid(
+        True,
+        color="#334155",
+        linestyle="--",
+        linewidth=0.6,
+        alpha=0.35
+    )
+
     return fig, ax
+
+
+def mostrar_tabla(df, formato="numero"):
+    df_mostrar = df.copy()
+
+    if formato == "porcentaje":
+        st.dataframe(
+            df_mostrar.style.format("{:.4f}"),
+            use_container_width=True
+        )
+    elif formato == "moneda":
+        st.dataframe(
+            df_mostrar.style.format("${:.4f}"),
+            use_container_width=True
+        )
+    else:
+        st.dataframe(
+            df_mostrar.style.format(precision=6),
+            use_container_width=True
+        )
+
+
+def formatear_leyenda(ax, ncol=3):
+    legend = ax.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.15),
+        ncol=ncol,
+        frameon=False,
+        fontsize=9
+    )
+
+    for text in legend.get_texts():
+        text.set_color("#E5E7EB")
 
 
 # =============================
@@ -223,14 +287,14 @@ if seccion == "Resumen":
 
     precios_dia = df_dia["Close"].dropna()
 
-    fig, ax = crear_figura_base()
+    fig, ax = crear_figura_base(figsize=(15, 6))
 
     color_linea = "#FF4D57" if precios_dia.iloc[-1] < precios_dia.iloc[0] else "#8ECDF8"
 
-    ax.plot(precios_dia.index, precios_dia.values, color=color_linea, linewidth=2)
-    ax.axhline(precios_dia.iloc[-1], color="#8ECDF8", linestyle="--", linewidth=1, alpha=0.7)
+    ax.plot(precios_dia.index, precios_dia.values, color=color_linea, linewidth=2.3)
+    ax.axhline(precios_dia.iloc[-1], color="#8ECDF8", linestyle="--", linewidth=1, alpha=0.75)
 
-    ax.set_title(f"{accion_nombre} - Precio intradía", color="#F8FAFC", fontsize=16, fontweight="bold")
+    ax.set_title(f"{accion_nombre} - Precio intradía", color="#F8FAFC", fontsize=17, fontweight="bold")
     ax.set_xlabel("Hora", color="#CBD5E1")
     ax.set_ylabel("Precio", color="#CBD5E1")
 
@@ -257,13 +321,18 @@ elif seccion == "Rendimientos últimos 5 días":
 
     tabla_5d["Rendimiento (%)"] = tabla_5d["Rendimiento"] * 100
 
-    st.dataframe(tabla_5d[["Precio", "Rendimiento (%)"]], use_container_width=True)
+    mostrar_tabla(tabla_5d[["Precio", "Rendimiento (%)"]])
 
-    fig, ax = crear_figura_base()
-    ax.bar(tabla_5d.index, tabla_5d["Rendimiento (%)"])
+    fig, ax = crear_figura_base(figsize=(13, 5))
+    colores = ["#8ECDF8" if x >= 0 else "#FF4D57" for x in tabla_5d["Rendimiento (%)"]]
+
+    ax.bar(tabla_5d.index, tabla_5d["Rendimiento (%)"], color=colores, alpha=0.9)
+    ax.axhline(0, color="#CBD5E1", linewidth=1, alpha=0.6)
+
     ax.set_title("Rendimientos diarios recientes", color="#F8FAFC", fontsize=16, fontweight="bold")
     ax.set_xlabel("Fecha", color="#CBD5E1")
     ax.set_ylabel("Rendimiento (%)", color="#CBD5E1")
+
     st.pyplot(fig)
 
 # =============================
@@ -285,7 +354,7 @@ elif seccion == "Medidas de riesgo":
         "Valor": [media_rend, desviacion_rend, kurtosis_rend, skewness_rend]
     })
 
-    st.dataframe(tabla_medidas, use_container_width=True)
+    mostrar_tabla(tabla_medidas)
 
 # =============================
 # VaR Y CVaR - MÉTODOS GENERALES
@@ -325,7 +394,19 @@ elif seccion == "VaR y CVaR - Métodos Generales":
         ]
     })
 
-    st.dataframe(tabla_var_general, use_container_width=True)
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric("VaR Normal 95%", f"{var_par_n_95 * 100:.4f}%")
+    col2.metric("VaR Normal 99%", f"{var_par_n_99 * 100:.4f}%")
+    col3.metric("VaR Normal 99.5%", f"{var_par_n_995 * 100:.4f}%")
+
+    col4, col5, col6 = st.columns(3)
+
+    col4.metric("VaR T 95%", f"{var_par_t_95 * 100:.4f}%")
+    col5.metric("VaR T 99%", f"{var_par_t_99 * 100:.4f}%")
+    col6.metric("VaR T 99.5%", f"{var_par_t_995 * 100:.4f}%")
+
+    mostrar_tabla(tabla_var_general)
 
 # =============================
 # VaR Y CVaR - ROLLING WINDOWS
@@ -373,27 +454,37 @@ elif seccion == "VaR y CVaR - Rolling Windows":
         "ES/CVaR 99% histórico": es_99_hist_movil * 100
     }).dropna()
 
-    st.dataframe(tabla_rolling.tail(), use_container_width=True)
+    st.markdown("### Últimos valores calculados")
+    mostrar_tabla(tabla_rolling.tail())
 
-    fig, ax = crear_figura_base()
+    fig, ax = crear_figura_base(figsize=(15, 7))
 
-    ax.plot(tabla_rolling.index, tabla_rolling["Rendimientos"], label="Rendimientos", alpha=0.35)
-    ax.plot(tabla_rolling.index, tabla_rolling["VaR 95% paramétrico"], label="VaR 95% paramétrico")
-    ax.plot(tabla_rolling.index, tabla_rolling["VaR 99% paramétrico"], label="VaR 99% paramétrico")
-    ax.plot(tabla_rolling.index, tabla_rolling["VaR 95% histórico"], label="VaR 95% histórico")
-    ax.plot(tabla_rolling.index, tabla_rolling["VaR 99% histórico"], label="VaR 99% histórico")
-    ax.plot(tabla_rolling.index, tabla_rolling["ES/CVaR 95% paramétrico"], label="ES/CVaR 95% paramétrico")
-    ax.plot(tabla_rolling.index, tabla_rolling["ES/CVaR 99% paramétrico"], label="ES/CVaR 99% paramétrico")
-    ax.plot(tabla_rolling.index, tabla_rolling["ES/CVaR 95% histórico"], label="ES/CVaR 95% histórico")
-    ax.plot(tabla_rolling.index, tabla_rolling["ES/CVaR 99% histórico"], label="ES/CVaR 99% histórico")
+    ax.plot(
+        tabla_rolling.index,
+        tabla_rolling["Rendimientos"],
+        label="Rendimientos",
+        color="#94A3B8",
+        alpha=0.20,
+        linewidth=0.8
+    )
 
-    ax.set_title("Rendimientos, VaR y ES/CVaR móvil", color="#F8FAFC", fontsize=16, fontweight="bold")
+    ax.plot(tabla_rolling.index, tabla_rolling["VaR 95% paramétrico"], label="VaR 95% paramétrico", color="#8ECDF8", linewidth=1.8)
+    ax.plot(tabla_rolling.index, tabla_rolling["VaR 99% paramétrico"], label="VaR 99% paramétrico", color="#2563EB", linewidth=1.8)
+
+    ax.plot(tabla_rolling.index, tabla_rolling["VaR 95% histórico"], label="VaR 95% histórico", color="#FF4D57", linewidth=1.8)
+    ax.plot(tabla_rolling.index, tabla_rolling["VaR 99% histórico"], label="VaR 99% histórico", color="#991B1B", linewidth=1.8)
+
+    ax.plot(tabla_rolling.index, tabla_rolling["ES/CVaR 95% paramétrico"], label="ES/CVaR 95% paramétrico", color="#F59E0B", linewidth=1.8)
+    ax.plot(tabla_rolling.index, tabla_rolling["ES/CVaR 99% paramétrico"], label="ES/CVaR 99% paramétrico", color="#D97706", linewidth=1.8)
+
+    ax.plot(tabla_rolling.index, tabla_rolling["ES/CVaR 95% histórico"], label="ES/CVaR 95% histórico", color="#A78BFA", linewidth=1.8)
+    ax.plot(tabla_rolling.index, tabla_rolling["ES/CVaR 99% histórico"], label="ES/CVaR 99% histórico", color="#7C3AED", linewidth=1.8)
+
+    ax.set_title("Rendimientos, VaR y ES/CVaR móvil", color="#F8FAFC", fontsize=17, fontweight="bold")
     ax.set_xlabel("Fecha", color="#CBD5E1")
     ax.set_ylabel("Porcentaje", color="#CBD5E1")
 
-    legend = ax.legend(loc="best")
-    for text in legend.get_texts():
-        text.set_color("#E5E7EB")
+    formatear_leyenda(ax, ncol=3)
 
     st.pyplot(fig)
 
@@ -466,20 +557,28 @@ elif seccion == "Volatilidad Móvil":
         ]
     })
 
-    st.dataframe(tabla_resumen, use_container_width=True)
+    mostrar_tabla(tabla_resumen)
 
-    fig, ax = crear_figura_base()
+    fig, ax = crear_figura_base(figsize=(15, 6))
 
-    ax.plot(df_results.index, df_results["Returns"], label="Retornos diarios", color="lightgray", alpha=0.6)
-    ax.plot(df_results.index, df_results["VaR_95"], label="VaR 95%", color="#8ECDF8", linewidth=1.5)
-    ax.plot(df_results.index, df_results["VaR_99"], label="VaR 99%", color="#FF4D57", linewidth=1.5)
+    ax.plot(
+        df_results.index,
+        df_results["Returns"],
+        label="Retornos diarios",
+        color="#94A3B8",
+        alpha=0.28,
+        linewidth=0.8
+    )
+
+    ax.plot(df_results.index, df_results["VaR_95"], label="VaR 95%", color="#8ECDF8", linewidth=1.8)
+    ax.plot(df_results.index, df_results["VaR_99"], label="VaR 99%", color="#FF4D57", linewidth=1.8)
 
     ax.scatter(
         df_results.index[df_results["Violation_95"]],
         df_results["Returns"][df_results["Violation_95"]],
         label="Violaciones 95%",
         color="#8ECDF8",
-        s=20
+        s=22
     )
 
     ax.scatter(
@@ -487,21 +586,19 @@ elif seccion == "Volatilidad Móvil":
         df_results["Returns"][df_results["Violation_99"]],
         label="Violaciones 99%",
         color="#FF4D57",
-        s=25
+        s=28
     )
 
     ax.set_title(
         f"Análisis de Riesgo: VaR móvil 252 días - {accion_nombre} ({ticker})",
         color="#F8FAFC",
-        fontsize=16,
+        fontsize=17,
         fontweight="bold"
     )
 
     ax.set_xlabel("Fecha", color="#CBD5E1")
     ax.set_ylabel("Retornos / Umbral de riesgo", color="#CBD5E1")
 
-    legend = ax.legend(loc="upper right")
-    for text in legend.get_texts():
-        text.set_color("#E5E7EB")
+    formatear_leyenda(ax, ncol=4)
 
     st.pyplot(fig)
