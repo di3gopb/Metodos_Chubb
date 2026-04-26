@@ -6,7 +6,7 @@ import yfinance as yf
 # CONFIGURACIÓN DE LA PÁGINA
 # =============================
 st.set_page_config(
-    page_title="Risk Analytics App",
+    page_title="ANÁLISIS DE LA ACCIÓN",
     page_icon="📉",
     layout="wide"
 )
