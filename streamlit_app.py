@@ -205,7 +205,9 @@ def formatear_leyenda(ax, ncol=3):
 # SIDEBAR
 # =============================
 acciones = {
-    "Chubb Limited": "CB"
+    "Chubb Limited": "CB",
+    "Corporación Actinver": "ACTINVRB.MX",
+    "BBVA": "BBVA.MX"
 }
 
 st.sidebar.title("Panel de selección")
