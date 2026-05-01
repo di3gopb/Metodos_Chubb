@@ -6,9 +6,9 @@ import matplotlib.pyplot as plt
 import scipy.stats as stats
 from scipy.stats import kurtosis, skew, norm
 
-# =============================
-# CONFIGURACIÓN
-# =============================
+# ============================================================
+# CONFIGURACIÓN GENERAL DE LA APP
+# ============================================================
 st.set_page_config(
     page_title="Análisis de la Acción",
     page_icon="📉",
@@ -16,9 +16,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# =============================
-# ESTILO
-# =============================
+# ============================================================
+# ESTILO VISUAL
+# ============================================================
 st.markdown(
     """
     <style>
@@ -107,11 +107,17 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# =============================
-# FUNCIONES
-# =============================
+# ============================================================
+# FUNCIONES DE DESCARGA Y FORMATO
+# ============================================================
+
 @st.cache_data
 def descargar_datos(ticker):
+    """
+    Descarga datos históricos desde 2010 y datos intradía para la vista inicial.
+    Los rendimientos se calculan como rendimientos diarios porcentuales simples.
+    """
+
     df_historico = yf.download(
         ticker,
         start="2010-01-01",
@@ -127,6 +133,17 @@ def descargar_datos(ticker):
         progress=False
     )
 
+    # Si Yahoo no devuelve datos intradía, usamos datos recientes como respaldo.
+    if df_1d.empty:
+        df_1d = yf.download(
+            ticker,
+            period="5d",
+            interval="30m",
+            auto_adjust=True,
+            progress=False
+        )
+
+    # A veces yfinance entrega columnas con doble índice; esto las deja planas.
     if hasattr(df_historico.columns, "nlevels") and df_historico.columns.nlevels > 1:
         df_historico.columns = df_historico.columns.get_level_values(0)
 
@@ -140,6 +157,11 @@ def descargar_datos(ticker):
 
 
 def crear_figura_base(figsize=(14, 6)):
+    """
+    Crea una figura con el estilo oscuro de la app.
+    Así todas las gráficas mantienen la misma apariencia.
+    """
+
     fig, ax = plt.subplots(figsize=figsize)
 
     fig.patch.set_facecolor("#11161C")
@@ -164,6 +186,10 @@ def crear_figura_base(figsize=(14, 6)):
 
 
 def mostrar_tabla(df):
+    """
+    Muestra tablas con un formato más limpio dentro de Streamlit.
+    """
+
     st.dataframe(
         df.style.format(precision=6),
         use_container_width=True
@@ -171,6 +197,10 @@ def mostrar_tabla(df):
 
 
 def formatear_leyenda(ax, ncol=3):
+    """
+    Coloca la leyenda debajo de la gráfica para que no tape los datos.
+    """
+
     legend = ax.legend(
         loc="upper center",
         bbox_to_anchor=(0.5, -0.15),
@@ -183,31 +213,170 @@ def formatear_leyenda(ax, ncol=3):
         text.set_color("#E5E7EB")
 
 
-def calcular_medidas_rolling(returns, window=252):
-    media_movil = returns.rolling(window=window).mean()
-    desviacion_movil = returns.rolling(window=window).std()
+# ============================================================
+# FUNCIONES DE RIESGO
+# ============================================================
 
+def calcular_var_es_generales(returns):
+    """
+    Calcula VaR y ES para la serie completa de datos.
+
+    Se incluyen:
+    - Paramétrico Normal
+    - Paramétrico T-Student
+    - Histórico
+    - Monte Carlo Normal
+    - Monte Carlo T-Student
+
+    Los niveles usados son 95%, 97.5% y 99%, como pide el proyecto.
+    """
+
+    niveles = [0.95, 0.975, 0.99]
+    media = returns.mean()
+    desviacion = returns.std()
+
+    # Grados de libertad para la aproximación t-student paramétrica.
+    gl_t = len(returns) - 1
+
+    # Simulación Monte Carlo.
+    # Se fija una semilla para que los resultados no cambien en cada recarga.
+    np.random.seed(42)
+    n = 1_000_000
+
+    simulacion_normal = np.random.normal(media, desviacion, n)
+
+    # Se usa gl = 5 para generar colas más pesadas, como en el código base.
+    gl_mc = 5
+    simulacion_t = media + desviacion * np.random.standard_t(gl_mc, n)
+
+    resultados = []
+
+    for nivel in niveles:
+
+        p = 1 - nivel
+
+        # --------------------------
+        # Paramétrico Normal
+        # --------------------------
+        var_normal = norm.ppf(p, loc=media, scale=desviacion)
+        z = norm.ppf(p)
+        es_normal = media - desviacion * (norm.pdf(z) / p)
+
+        resultados.append({
+            "Método": "Paramétrico Normal",
+            "Nivel de confianza": f"{nivel:.1%}",
+            "VaR": var_normal,
+            "ES/CVaR": es_normal,
+            "VaR (%)": var_normal * 100,
+            "ES/CVaR (%)": es_normal * 100
+        })
+
+        # --------------------------
+        # Paramétrico T-Student
+        # --------------------------
+        q_t = stats.t.ppf(p, gl_t)
+        var_t = stats.t.ppf(p, gl_t, loc=media, scale=desviacion)
+
+        # Fórmula de ES para t-student en cola izquierda.
+        es_t = media - desviacion * (
+            stats.t.pdf(q_t, gl_t) * (gl_t + q_t**2) / ((gl_t - 1) * p)
+        )
+
+        resultados.append({
+            "Método": "Paramétrico T-Student",
+            "Nivel de confianza": f"{nivel:.1%}",
+            "VaR": var_t,
+            "ES/CVaR": es_t,
+            "VaR (%)": var_t * 100,
+            "ES/CVaR (%)": es_t * 100
+        })
+
+        # --------------------------
+        # Histórico
+        # --------------------------
+        var_historico = returns.quantile(p)
+        es_historico = returns[returns <= var_historico].mean()
+
+        resultados.append({
+            "Método": "Histórico",
+            "Nivel de confianza": f"{nivel:.1%}",
+            "VaR": var_historico,
+            "ES/CVaR": es_historico,
+            "VaR (%)": var_historico * 100,
+            "ES/CVaR (%)": es_historico * 100
+        })
+
+        # --------------------------
+        # Monte Carlo Normal
+        # --------------------------
+        var_mc_normal = np.percentile(simulacion_normal, p * 100)
+        es_mc_normal = simulacion_normal[simulacion_normal <= var_mc_normal].mean()
+
+        resultados.append({
+            "Método": "Monte Carlo Normal",
+            "Nivel de confianza": f"{nivel:.1%}",
+            "VaR": var_mc_normal,
+            "ES/CVaR": es_mc_normal,
+            "VaR (%)": var_mc_normal * 100,
+            "ES/CVaR (%)": es_mc_normal * 100
+        })
+
+        # --------------------------
+        # Monte Carlo T-Student
+        # --------------------------
+        var_mc_t = np.percentile(simulacion_t, p * 100)
+        es_mc_t = simulacion_t[simulacion_t <= var_mc_t].mean()
+
+        resultados.append({
+            "Método": "Monte Carlo T-Student",
+            "Nivel de confianza": f"{nivel:.1%}",
+            "VaR": var_mc_t,
+            "ES/CVaR": es_mc_t,
+            "VaR (%)": var_mc_t * 100,
+            "ES/CVaR (%)": es_mc_t * 100
+        })
+
+    return pd.DataFrame(resultados)
+
+
+def calcular_medidas_rolling(returns, window=252):
+    """
+    Calcula VaR y ES con rolling window de 252 rendimientos.
+
+    Importante:
+    Se usa shift(1) para que la medida del día t se calcule con los 252 días anteriores,
+    y no con el rendimiento del mismo día t.
+    """
+
+    media_movil = returns.rolling(window=window).mean().shift(1)
+    desviacion_movil = returns.rolling(window=window).std().shift(1)
+
+    # VaR paramétrico normal móvil.
     var_95_movil = norm.ppf(1 - 0.95, media_movil, desviacion_movil)
     var_99_movil = norm.ppf(1 - 0.99, media_movil, desviacion_movil)
 
-    var_95_hist_movil = returns.rolling(window=window).quantile(1 - 0.95)
-    var_99_hist_movil = returns.rolling(window=window).quantile(1 - 0.99)
+    # VaR histórico móvil.
+    var_95_hist_movil = returns.rolling(window=window).quantile(1 - 0.95).shift(1)
+    var_99_hist_movil = returns.rolling(window=window).quantile(1 - 0.99).shift(1)
 
+    # ES paramétrico normal móvil.
     z_95 = norm.ppf(1 - 0.95)
     z_99 = norm.ppf(1 - 0.99)
 
     es_95_param_movil = media_movil - desviacion_movil * (norm.pdf(z_95) / (1 - 0.95))
     es_99_param_movil = media_movil - desviacion_movil * (norm.pdf(z_99) / (1 - 0.99))
 
+    # ES histórico móvil.
+    # El shift se aplica después porque cada ventana debe predecir el siguiente rendimiento.
     es_95_hist_movil = returns.rolling(window=window).apply(
         lambda x: x[x <= x.quantile(1 - 0.95)].mean(),
         raw=False
-    )
+    ).shift(1)
 
     es_99_hist_movil = returns.rolling(window=window).apply(
         lambda x: x[x <= x.quantile(1 - 0.99)].mean(),
         raw=False
-    )
+    ).shift(1)
 
     tabla_rolling = pd.DataFrame({
         "Rendimientos": returns * 100,
@@ -224,9 +393,10 @@ def calcular_medidas_rolling(returns, window=252):
     return tabla_rolling
 
 
-# =============================
+# ============================================================
 # SIDEBAR
-# =============================
+# ============================================================
+
 acciones = {
     "Chubb Limited": "CB",
     "Corporación Actinver": "ACTINVRB.MX",
@@ -260,9 +430,10 @@ seccion = st.sidebar.radio(
 st.sidebar.markdown("---")
 st.sidebar.write(f"Ticker seleccionado: **{ticker}**")
 
-# =============================
-# DATOS
-# =============================
+# ============================================================
+# DESCARGA Y CÁLCULOS BASE
+# ============================================================
+
 df, df_dia, precios, returns = descargar_datos(ticker)
 
 precio_actual = float(precios.iloc[-1])
@@ -275,12 +446,13 @@ desviacion_rend = returns.std()
 kurtosis_rend = kurtosis(returns)
 skewness_rend = skew(returns)
 
-# =============================
+# ============================================================
 # RESUMEN
-# =============================
+# ============================================================
+
 if seccion == "Resumen":
 
-    st.markdown('<div class="market-text">Mercado · Delayed Quote</div>', unsafe_allow_html=True)
+    st.markdown('<div class="market-text">Mercado · Delayed Quote · Fuente: Yahoo Finance</div>', unsafe_allow_html=True)
 
     st.markdown(
         f'<div class="company-title">{accion_nombre} ({ticker})</div>',
@@ -295,6 +467,7 @@ if seccion == "Resumen":
 
     with col2:
         st.markdown('<div class="section-text">Cambio diario</div>', unsafe_allow_html=True)
+
         clase = "price-red" if cambio < 0 else "price-blue"
         signo = "+" if cambio > 0 else ""
 
@@ -311,6 +484,20 @@ if seccion == "Resumen":
         )
 
     st.markdown("---")
+
+    st.markdown(
+        f"""
+        <div class="section-card">
+            <div class="section-text">
+                <b>Activo seleccionado:</b> {accion_nombre}<br>
+                <b>Ticker:</b> {ticker}<br>
+                <b>Periodo histórico:</b> datos diarios descargados desde 2010.<br>
+                <b>Uso:</b> análisis de rendimientos, VaR, ES/CVaR, rolling windows y violaciones.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
     st.markdown('<div class="section-title">Precio del día</div>', unsafe_allow_html=True)
 
@@ -336,9 +523,10 @@ if seccion == "Resumen":
     c3.metric("Media rend.", f"{media_rend:.4%}")
     c4.metric("Volatilidad", f"{desviacion_rend:.4%}")
 
-# =============================
-# RENDIMIENTOS 5 DÍAS
-# =============================
+# ============================================================
+# RENDIMIENTOS ÚLTIMOS 5 DÍAS
+# ============================================================
+
 elif seccion == "Rendimientos últimos 5 días":
 
     st.markdown('<div class="section-title">Rendimientos de los últimos 5 días</div>', unsafe_allow_html=True)
@@ -364,9 +552,10 @@ elif seccion == "Rendimientos últimos 5 días":
 
     st.pyplot(fig)
 
-# =============================
+# ============================================================
 # MEDIDAS DE RIESGO
-# =============================
+# ============================================================
+
 elif seccion == "Medidas de riesgo":
 
     st.markdown('<div class="section-title">Medidas de riesgo</div>', unsafe_allow_html=True)
@@ -375,152 +564,77 @@ elif seccion == "Medidas de riesgo":
 
     c1.metric("Media", f"{media_rend:.6f}")
     c2.metric("Desviación estándar", f"{desviacion_rend:.6f}")
-    c3.metric("Kurtosis", f"{kurtosis_rend:.6f}")
+    c3.metric("Exceso de curtosis", f"{kurtosis_rend:.6f}")
     c4.metric("Sesgo", f"{skewness_rend:.6f}")
 
     tabla_medidas = pd.DataFrame({
-        "Medida": ["Media", "Desviación estándar", "Kurtosis", "Sesgo"],
+        "Medida": ["Media", "Desviación estándar", "Exceso de curtosis", "Sesgo"],
         "Valor": [media_rend, desviacion_rend, kurtosis_rend, skewness_rend]
     })
 
     mostrar_tabla(tabla_medidas)
 
-# =============================
-# VaR Y CVaR - MÉTODOS GENERALES
-# =============================
+# ============================================================
+# MÉTODOS GENERALES: VaR Y ES
+# ============================================================
+
 elif seccion == "VaR y CVaR - Métodos Generales":
 
     st.markdown('<div class="section-title">VaR y CVaR - Métodos Generales</div>', unsafe_allow_html=True)
 
-    gl = len(returns) - 1
+    st.markdown(
+        """
+        <div class="section-card">
+            <div class="section-text">
+                En esta sección se calcula el VaR y el ES/CVaR usando la serie completa de rendimientos.
+                Se consideran los niveles de confianza 95%, 97.5% y 99%, bajo aproximaciones paramétricas,
+                históricas y Monte Carlo.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
-    # VaR paramétrico normal
-    var_par_n_95 = norm.ppf(1 - 0.95, loc=media_rend, scale=desviacion_rend)
-    var_par_n_99 = norm.ppf(1 - 0.99, loc=media_rend, scale=desviacion_rend)
-    var_par_n_995 = norm.ppf(1 - 0.995, loc=media_rend, scale=desviacion_rend)
+    tabla_var_es_general = calcular_var_es_generales(returns)
 
-    # VaR paramétrico T-Student
-    var_par_t_95 = stats.t.ppf(1 - 0.95, gl, loc=media_rend, scale=desviacion_rend)
-    var_par_t_99 = stats.t.ppf(1 - 0.99, gl, loc=media_rend, scale=desviacion_rend)
-    var_par_t_995 = stats.t.ppf(1 - 0.995, gl, loc=media_rend, scale=desviacion_rend)
+    st.markdown("### Tabla completa de VaR y ES/CVaR")
+    mostrar_tabla(tabla_var_es_general)
 
-    # Monte Carlo normal
-    n = 1000000
+    st.markdown("### Resumen visual por método")
 
-    mu = float(media_rend)
-    sigma = float(desviacion_rend)
+    for metodo in tabla_var_es_general["Método"].unique():
+        st.markdown(f"#### {metodo}")
 
-    returns_normal = np.random.normal(mu, sigma, n)
+        tabla_metodo = tabla_var_es_general[tabla_var_es_general["Método"] == metodo]
 
-    var_monte_carlo_95 = np.percentile(returns_normal, 5)
-    var_monte_carlo_99 = np.percentile(returns_normal, 1)
-    var_monte_carlo_995 = np.percentile(returns_normal, 0.5)
+        col1, col2, col3 = st.columns(3)
 
-    # Monte Carlo T-Student
-    gl_mc = 5
+        for col, (_, fila) in zip([col1, col2, col3], tabla_metodo.iterrows()):
+            col.metric(
+                f"VaR {fila['Nivel de confianza']}",
+                f"{fila['VaR (%)']:.4f}%",
+                f"ES {fila['ES/CVaR (%)']:.4f}%"
+            )
 
-    returns_t = mu + sigma * np.random.standard_t(gl_mc, n)
+# ============================================================
+# ROLLING WINDOWS
+# ============================================================
 
-    var_monte_carlo_t_95 = np.percentile(returns_t, 5)
-    var_monte_carlo_t_99 = np.percentile(returns_t, 1)
-    var_monte_carlo_t_995 = np.percentile(returns_t, 0.5)
-
-    tabla_var_general = pd.DataFrame({
-        "Método": [
-            "Paramétrico Normal",
-            "Paramétrico Normal",
-            "Paramétrico Normal",
-            "Paramétrico T-Student",
-            "Paramétrico T-Student",
-            "Paramétrico T-Student",
-            "Monte Carlo Normal",
-            "Monte Carlo Normal",
-            "Monte Carlo Normal",
-            "Monte Carlo T-Student",
-            "Monte Carlo T-Student",
-            "Monte Carlo T-Student"
-        ],
-        "Nivel de confianza": [
-            "95%",
-            "99%",
-            "99.5%",
-            "95%",
-            "99%",
-            "99.5%",
-            "95%",
-            "99%",
-            "99.5%",
-            "95%",
-            "99%",
-            "99.5%"
-        ],
-        "VaR": [
-            var_par_n_95,
-            var_par_n_99,
-            var_par_n_995,
-            var_par_t_95,
-            var_par_t_99,
-            var_par_t_995,
-            var_monte_carlo_95,
-            var_monte_carlo_99,
-            var_monte_carlo_995,
-            var_monte_carlo_t_95,
-            var_monte_carlo_t_99,
-            var_monte_carlo_t_995
-        ],
-        "VaR (%)": [
-            var_par_n_95 * 100,
-            var_par_n_99 * 100,
-            var_par_n_995 * 100,
-            var_par_t_95 * 100,
-            var_par_t_99 * 100,
-            var_par_t_995 * 100,
-            var_monte_carlo_95 * 100,
-            var_monte_carlo_99 * 100,
-            var_monte_carlo_995 * 100,
-            var_monte_carlo_t_95 * 100,
-            var_monte_carlo_t_99 * 100,
-            var_monte_carlo_t_995 * 100
-        ]
-    })
-
-    st.markdown("### VaR Paramétrico Normal")
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("VaR Normal 95%", f"{var_par_n_95 * 100:.4f}%")
-    col2.metric("VaR Normal 99%", f"{var_par_n_99 * 100:.4f}%")
-    col3.metric("VaR Normal 99.5%", f"{var_par_n_995 * 100:.4f}%")
-
-    st.markdown("### VaR Paramétrico T-Student")
-
-    col4, col5, col6 = st.columns(3)
-    col4.metric("VaR T 95%", f"{var_par_t_95 * 100:.4f}%")
-    col5.metric("VaR T 99%", f"{var_par_t_99 * 100:.4f}%")
-    col6.metric("VaR T 99.5%", f"{var_par_t_995 * 100:.4f}%")
-
-    st.markdown("### VaR Monte Carlo Normal")
-
-    col7, col8, col9 = st.columns(3)
-    col7.metric("Monte Carlo Normal 95%", f"{var_monte_carlo_95 * 100:.4f}%")
-    col8.metric("Monte Carlo Normal 99%", f"{var_monte_carlo_99 * 100:.4f}%")
-    col9.metric("Monte Carlo Normal 99.5%", f"{var_monte_carlo_995 * 100:.4f}%")
-
-    st.markdown("### VaR Monte Carlo T-Student")
-
-    col10, col11, col12 = st.columns(3)
-    col10.metric("Monte Carlo T 95%", f"{var_monte_carlo_t_95 * 100:.4f}%")
-    col11.metric("Monte Carlo T 99%", f"{var_monte_carlo_t_99 * 100:.4f}%")
-    col12.metric("Monte Carlo T 99.5%", f"{var_monte_carlo_t_995 * 100:.4f}%")
-
-    st.markdown("### Tabla completa de métodos generales")
-    mostrar_tabla(tabla_var_general)
-
-# =============================
-# VaR Y CVaR - ROLLING WINDOWS
-# =============================
 elif seccion == "VaR y CVaR - Rolling Windows":
 
     st.markdown('<div class="section-title">VaR y CVaR - Rolling Windows</div>', unsafe_allow_html=True)
+
+    st.markdown(
+        """
+        <div class="section-card">
+            <div class="section-text">
+                Aquí se calcula el VaR y el ES/CVaR con una ventana móvil de 252 rendimientos.
+                Cada estimación se desfasa un día para que se compare contra el rendimiento siguiente.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
     tabla_rolling = calcular_medidas_rolling(returns, window=252)
 
@@ -551,9 +665,10 @@ elif seccion == "VaR y CVaR - Rolling Windows":
 
     st.pyplot(fig)
 
-# =============================
-# COMPARACIÓN
-# =============================
+# ============================================================
+# COMPARACIÓN: VIOLACIONES
+# ============================================================
+
 elif seccion == "Comparación":
 
     st.markdown('<div class="section-title">Comparación</div>', unsafe_allow_html=True)
@@ -562,8 +677,8 @@ elif seccion == "Comparación":
         """
         <div class="section-card">
             <div class="section-text">
-                En esta sección se comparan las violaciones de las distintas medidas de riesgo.
-                Una violación ocurre cuando el rendimiento diario observado es menor que la medida estimada.
+                En esta sección se cuentan las violaciones de cada medida de riesgo.
+                Una violación ocurre cuando el rendimiento diario observado es menor que el VaR o el ES estimado.
             </div>
         </div>
         """,
@@ -658,12 +773,25 @@ elif seccion == "Comparación":
 
     st.pyplot(fig)
 
-# =============================
+# ============================================================
 # VOLATILIDAD MÓVIL
-# =============================
+# ============================================================
+
 elif seccion == "Volatilidad Móvil":
 
     st.markdown('<div class="section-title">Volatilidad Móvil</div>', unsafe_allow_html=True)
+
+    st.markdown(
+        """
+        <div class="section-card">
+            <div class="section-text">
+                Esta sección calcula el VaR usando únicamente la volatilidad móvil de 252 días,
+                bajo una distribución normal estándar.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
     window = 252
     alpha_95 = 0.05
@@ -674,7 +802,10 @@ elif seccion == "Volatilidad Móvil":
 
     df_var = pd.DataFrame(index=returns.index)
     df_var["Returns"] = returns
-    df_var["Sigma_252"] = df_var["Returns"].rolling(window=window).std()
+
+    # Se usa shift(1) para que la volatilidad del día t use solo información pasada.
+    df_var["Sigma_252"] = df_var["Returns"].rolling(window=window).std().shift(1)
+
     df_var["VaR_95"] = q_95 * df_var["Sigma_252"]
     df_var["VaR_99"] = q_99 * df_var["Sigma_252"]
 
@@ -704,8 +835,8 @@ elif seccion == "Volatilidad Móvil":
             num_viol_99
         ],
         "Porcentaje real": [
-            num_viol_95 / total_obs,
-            num_viol_99 / total_obs
+            num_viol_95 / total_obs * 100,
+            num_viol_99 / total_obs * 100
         ]
     })
 
@@ -715,19 +846,19 @@ elif seccion == "Volatilidad Móvil":
 
     ax.plot(
         df_results.index,
-        df_results["Returns"],
+        df_results["Returns"] * 100,
         label="Retornos diarios",
         color="#94A3B8",
         alpha=0.28,
         linewidth=0.8
     )
 
-    ax.plot(df_results.index, df_results["VaR_95"], label="VaR 95%", color="#8ECDF8", linewidth=1.8)
-    ax.plot(df_results.index, df_results["VaR_99"], label="VaR 99%", color="#FF4D57", linewidth=1.8)
+    ax.plot(df_results.index, df_results["VaR_95"] * 100, label="VaR 95%", color="#8ECDF8", linewidth=1.8)
+    ax.plot(df_results.index, df_results["VaR_99"] * 100, label="VaR 99%", color="#FF4D57", linewidth=1.8)
 
     ax.scatter(
         df_results.index[df_results["Violation_95"]],
-        df_results["Returns"][df_results["Violation_95"]],
+        df_results["Returns"][df_results["Violation_95"]] * 100,
         label="Violaciones 95%",
         color="#8ECDF8",
         s=22
@@ -735,21 +866,21 @@ elif seccion == "Volatilidad Móvil":
 
     ax.scatter(
         df_results.index[df_results["Violation_99"]],
-        df_results["Returns"][df_results["Violation_99"]],
+        df_results["Returns"][df_results["Violation_99"]] * 100,
         label="Violaciones 99%",
         color="#FF4D57",
         s=28
     )
 
     ax.set_title(
-        f"Análisis de Riesgo: VaR móvil 252 días - {accion_nombre} ({ticker})",
+        f"Análisis de Riesgo: VaR con volatilidad móvil 252 días - {accion_nombre} ({ticker})",
         color="#F8FAFC",
         fontsize=17,
         fontweight="bold"
     )
 
     ax.set_xlabel("Fecha", color="#CBD5E1")
-    ax.set_ylabel("Retornos / Umbral de riesgo", color="#CBD5E1")
+    ax.set_ylabel("Retornos / Umbral de riesgo (%)", color="#CBD5E1")
 
     formatear_leyenda(ax, ncol=4)
 
