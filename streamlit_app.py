@@ -1,7 +1,6 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 import scipy.stats as stats
 from scipy.stats import kurtosis, skew, norm
@@ -88,11 +87,6 @@ st.markdown(
         font-size: 16px;
     }
 
-    .stDataFrame {
-        background-color: #151C26;
-        border-radius: 14px;
-    }
-
     div[data-testid="stMetric"] {
         background-color: #151C26;
         border: 1px solid #263241;
@@ -168,24 +162,11 @@ def crear_figura_base(figsize=(14, 6)):
     return fig, ax
 
 
-def mostrar_tabla(df, formato="numero"):
-    df_mostrar = df.copy()
-
-    if formato == "porcentaje":
-        st.dataframe(
-            df_mostrar.style.format("{:.4f}"),
-            use_container_width=True
-        )
-    elif formato == "moneda":
-        st.dataframe(
-            df_mostrar.style.format("${:.4f}"),
-            use_container_width=True
-        )
-    else:
-        st.dataframe(
-            df_mostrar.style.format(precision=6),
-            use_container_width=True
-        )
+def mostrar_tabla(df):
+    st.dataframe(
+        df.style.format(precision=6),
+        use_container_width=True
+    )
 
 
 def formatear_leyenda(ax, ncol=3):
@@ -199,6 +180,47 @@ def formatear_leyenda(ax, ncol=3):
 
     for text in legend.get_texts():
         text.set_color("#E5E7EB")
+
+
+def calcular_medidas_rolling(returns, window=252):
+    media_movil = returns.rolling(window=window).mean()
+    desviacion_movil = returns.rolling(window=window).std()
+
+    var_95_movil = norm.ppf(1 - 0.95, media_movil, desviacion_movil)
+    var_99_movil = norm.ppf(1 - 0.99, media_movil, desviacion_movil)
+
+    var_95_hist_movil = returns.rolling(window=window).quantile(1 - 0.95)
+    var_99_hist_movil = returns.rolling(window=window).quantile(1 - 0.99)
+
+    z_95 = norm.ppf(1 - 0.95)
+    z_99 = norm.ppf(1 - 0.99)
+
+    es_95_param_movil = media_movil - desviacion_movil * (norm.pdf(z_95) / (1 - 0.95))
+    es_99_param_movil = media_movil - desviacion_movil * (norm.pdf(z_99) / (1 - 0.99))
+
+    es_95_hist_movil = returns.rolling(window=window).apply(
+        lambda x: x[x <= x.quantile(1 - 0.95)].mean(),
+        raw=False
+    )
+
+    es_99_hist_movil = returns.rolling(window=window).apply(
+        lambda x: x[x <= x.quantile(1 - 0.99)].mean(),
+        raw=False
+    )
+
+    tabla_rolling = pd.DataFrame({
+        "Rendimientos": returns * 100,
+        "VaR 95% paramétrico": var_95_movil * 100,
+        "VaR 99% paramétrico": var_99_movil * 100,
+        "VaR 95% histórico": var_95_hist_movil * 100,
+        "VaR 99% histórico": var_99_hist_movil * 100,
+        "ES 95% paramétrico": es_95_param_movil * 100,
+        "ES 99% paramétrico": es_99_param_movil * 100,
+        "ES 95% histórico": es_95_hist_movil * 100,
+        "ES 99% histórico": es_99_hist_movil * 100
+    }).dropna()
+
+    return tabla_rolling
 
 
 # =============================
@@ -257,7 +279,7 @@ skewness_rend = skew(returns)
 # =============================
 if seccion == "Resumen":
 
-    st.markdown('<div class="market-text">NYSE · Delayed Quote · USD</div>', unsafe_allow_html=True)
+    st.markdown('<div class="market-text">Mercado · Delayed Quote</div>', unsafe_allow_html=True)
 
     st.markdown(
         f'<div class="company-title">{accion_nombre} ({ticker})</div>',
@@ -304,7 +326,7 @@ if seccion == "Resumen":
 
     c1, c2, c3, c4 = st.columns(4)
 
-    c1.metric("Precio actual", f"${precio_actual:.2f}")
+    c1.metric("Precio actual", f"{precio_actual:.2f}")
     c2.metric("Cambio diario", f"{cambio:.2f}", f"{cambio_pct:.2%}")
     c3.metric("Media rend.", f"{media_rend:.4%}")
     c4.metric("Volatilidad", f"{desviacion_rend:.4%}")
@@ -417,58 +439,14 @@ elif seccion == "VaR y CVaR - Rolling Windows":
 
     st.markdown('<div class="section-title">VaR y CVaR - Rolling Windows</div>', unsafe_allow_html=True)
 
-    window = 252
-
-    media_movil = returns.rolling(window=window).mean()
-    desviacion_movil = returns.rolling(window=window).std()
-
-    var_95_movil = norm.ppf(1 - 0.95, media_movil, desviacion_movil)
-    var_99_movil = norm.ppf(1 - 0.99, media_movil, desviacion_movil)
-
-    var_95_hist_movil = returns.rolling(window=window).quantile(1 - 0.95)
-    var_99_hist_movil = returns.rolling(window=window).quantile(1 - 0.99)
-
-    z_95 = norm.ppf(1 - 0.95)
-    z_99 = norm.ppf(1 - 0.99)
-
-    es_95_param_movil = media_movil - desviacion_movil * (norm.pdf(z_95) / (1 - 0.95))
-    es_99_param_movil = media_movil - desviacion_movil * (norm.pdf(z_99) / (1 - 0.99))
-
-    es_95_hist_movil = returns.rolling(window=window).apply(
-        lambda x: x[x <= x.quantile(1 - 0.95)].mean(),
-        raw=False
-    )
-
-    es_99_hist_movil = returns.rolling(window=window).apply(
-        lambda x: x[x <= x.quantile(1 - 0.99)].mean(),
-        raw=False
-    )
-
-    tabla_rolling = pd.DataFrame({
-        "Rendimientos": returns * 100,
-        "VaR 95% paramétrico": var_95_movil * 100,
-        "VaR 99% paramétrico": var_99_movil * 100,
-        "VaR 95% histórico": var_95_hist_movil * 100,
-        "VaR 99% histórico": var_99_hist_movil * 100,
-        "ES/CVaR 95% paramétrico": es_95_param_movil * 100,
-        "ES/CVaR 99% paramétrico": es_99_param_movil * 100,
-        "ES/CVaR 95% histórico": es_95_hist_movil * 100,
-        "ES/CVaR 99% histórico": es_99_hist_movil * 100
-    }).dropna()
+    tabla_rolling = calcular_medidas_rolling(returns, window=252)
 
     st.markdown("### Últimos valores calculados")
     mostrar_tabla(tabla_rolling.tail())
 
     fig, ax = crear_figura_base(figsize=(15, 7))
 
-    ax.plot(
-        tabla_rolling.index,
-        tabla_rolling["Rendimientos"],
-        label="Rendimientos",
-        color="#94A3B8",
-        alpha=0.20,
-        linewidth=0.8
-    )
+    ax.plot(tabla_rolling.index, tabla_rolling["Rendimientos"], label="Rendimientos", color="#94A3B8", alpha=0.20, linewidth=0.8)
 
     ax.plot(tabla_rolling.index, tabla_rolling["VaR 95% paramétrico"], label="VaR 95% paramétrico", color="#8ECDF8", linewidth=1.8)
     ax.plot(tabla_rolling.index, tabla_rolling["VaR 99% paramétrico"], label="VaR 99% paramétrico", color="#2563EB", linewidth=1.8)
@@ -476,11 +454,11 @@ elif seccion == "VaR y CVaR - Rolling Windows":
     ax.plot(tabla_rolling.index, tabla_rolling["VaR 95% histórico"], label="VaR 95% histórico", color="#FF4D57", linewidth=1.8)
     ax.plot(tabla_rolling.index, tabla_rolling["VaR 99% histórico"], label="VaR 99% histórico", color="#991B1B", linewidth=1.8)
 
-    ax.plot(tabla_rolling.index, tabla_rolling["ES/CVaR 95% paramétrico"], label="ES/CVaR 95% paramétrico", color="#F59E0B", linewidth=1.8)
-    ax.plot(tabla_rolling.index, tabla_rolling["ES/CVaR 99% paramétrico"], label="ES/CVaR 99% paramétrico", color="#D97706", linewidth=1.8)
+    ax.plot(tabla_rolling.index, tabla_rolling["ES 95% paramétrico"], label="ES/CVaR 95% paramétrico", color="#F59E0B", linewidth=1.8)
+    ax.plot(tabla_rolling.index, tabla_rolling["ES 99% paramétrico"], label="ES/CVaR 99% paramétrico", color="#D97706", linewidth=1.8)
 
-    ax.plot(tabla_rolling.index, tabla_rolling["ES/CVaR 95% histórico"], label="ES/CVaR 95% histórico", color="#A78BFA", linewidth=1.8)
-    ax.plot(tabla_rolling.index, tabla_rolling["ES/CVaR 99% histórico"], label="ES/CVaR 99% histórico", color="#7C3AED", linewidth=1.8)
+    ax.plot(tabla_rolling.index, tabla_rolling["ES 95% histórico"], label="ES/CVaR 95% histórico", color="#A78BFA", linewidth=1.8)
+    ax.plot(tabla_rolling.index, tabla_rolling["ES 99% histórico"], label="ES/CVaR 99% histórico", color="#7C3AED", linewidth=1.8)
 
     ax.set_title("Rendimientos, VaR y ES/CVaR móvil", color="#F8FAFC", fontsize=17, fontweight="bold")
     ax.set_xlabel("Fecha", color="#CBD5E1")
@@ -501,12 +479,101 @@ elif seccion == "Comparación":
         """
         <div class="section-card">
             <div class="section-text">
-                Esta sección queda pendiente para el inciso e).
+                En esta sección se comparan las violaciones de las distintas medidas de riesgo.
+                Una violación ocurre cuando el rendimiento diario observado es menor que la medida estimada.
             </div>
         </div>
         """,
         unsafe_allow_html=True
     )
+
+    tabla_rolling = calcular_medidas_rolling(returns, window=252)
+
+    columnas_riesgo = [
+        "VaR 95% paramétrico",
+        "VaR 99% paramétrico",
+        "VaR 95% histórico",
+        "VaR 99% histórico",
+        "ES 95% paramétrico",
+        "ES 99% paramétrico",
+        "ES 95% histórico",
+        "ES 99% histórico"
+    ]
+
+    df_violaciones = tabla_rolling.copy()
+
+    resumen = []
+
+    for columna in columnas_riesgo:
+
+        nombre_violacion = "Violación " + columna
+
+        df_violaciones[nombre_violacion] = (
+            df_violaciones["Rendimientos"] < df_violaciones[columna]
+        )
+
+        numero_violaciones = df_violaciones[nombre_violacion].sum()
+        total_dias = len(df_violaciones)
+        porcentaje = numero_violaciones / total_dias * 100
+
+        resumen.append({
+            "Medida": columna,
+            "Violaciones": int(numero_violaciones),
+            "Total de días": total_dias,
+            "Porcentaje": round(porcentaje, 4),
+            "Menor a 2.5%": "Sí" if porcentaje < 2.5 else "No"
+        })
+
+    tabla_resumen_violaciones = pd.DataFrame(resumen)
+
+    st.markdown("### Tabla de violaciones")
+    mostrar_tabla(tabla_resumen_violaciones)
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric("Menor porcentaje", f"{tabla_resumen_violaciones['Porcentaje'].min():.4f}%")
+    c2.metric("Mayor porcentaje", f"{tabla_resumen_violaciones['Porcentaje'].max():.4f}%")
+    c3.metric("Total de días", int(tabla_resumen_violaciones["Total de días"].iloc[0]))
+
+    st.markdown("### Días donde hubo violaciones")
+
+    fig, ax = crear_figura_base(figsize=(15, 6))
+
+    ax.plot(
+        df_violaciones.index,
+        df_violaciones["Rendimientos"],
+        color="#94A3B8",
+        alpha=0.35,
+        linewidth=0.8,
+        label="Rendimientos diarios"
+    )
+
+    violaciones_95 = df_violaciones[df_violaciones["Violación VaR 95% paramétrico"]]
+    violaciones_99 = df_violaciones[df_violaciones["Violación VaR 99% paramétrico"]]
+
+    ax.scatter(
+        violaciones_95.index,
+        violaciones_95["Rendimientos"],
+        color="#FF4D57",
+        s=30,
+        label="Violaciones VaR 95%"
+    )
+
+    ax.scatter(
+        violaciones_99.index,
+        violaciones_99["Rendimientos"],
+        color="#8ECDF8",
+        s=35,
+        label="Violaciones VaR 99%"
+    )
+
+    ax.set_title("Días donde hubo violaciones", color="#F8FAFC", fontsize=17, fontweight="bold")
+    ax.set_xlabel("Fecha", color="#CBD5E1")
+    ax.set_ylabel("Rendimiento diario (%)", color="#CBD5E1")
+
+    formatear_leyenda(ax, ncol=3)
+
+    st.pyplot(fig)
 
 # =============================
 # VOLATILIDAD MÓVIL
