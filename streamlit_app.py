@@ -6,9 +6,9 @@ import matplotlib.pyplot as plt
 import scipy.stats as stats
 from scipy.stats import kurtosis, skew, norm
 
-# ============================================================
-# CONFIGURACIÓN GENERAL DE LA APP
-# ============================================================
+
+# ENCABEZADO DE PESTAÑA
+
 st.set_page_config(
     page_title="Análisis de la Acción",
     page_icon="📉",
@@ -16,9 +16,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ============================================================
-# ESTILO VISUAL
-# ============================================================
+
+# DISEÑO DE LA PÁGINA
 st.markdown(
     """
     <style>
@@ -107,9 +106,8 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# ============================================================
 # FUNCIONES DE DESCARGA Y FORMATO
-# ============================================================
+
 
 @st.cache_data
 def descargar_datos(ticker):
@@ -125,6 +123,7 @@ def descargar_datos(ticker):
         progress=False
     )
 
+    #SE UTILIZA PARA LA PANTALLA INICIAL DE PEQUEÑO RESUMEN DEL ÚLTINO DÍA DE LA EMPRESA EN YAHOO
     df_1d = yf.download(
         ticker,
         period="1d",
@@ -213,9 +212,9 @@ def formatear_leyenda(ax, ncol=3):
         text.set_color("#E5E7EB")
 
 
-# ============================================================
+
 # FUNCIONES DE RIESGO
-# ============================================================
+
 
 def calcular_var_es_generales(returns):
     """
@@ -239,7 +238,7 @@ def calcular_var_es_generales(returns):
     gl_t = len(returns) - 1
 
     # Simulación Monte Carlo.
-    # Se fija una semilla para que los resultados no cambien en cada recarga.
+    # Se fija una semilla para que los resultados no cambien en cada recarga. 
     np.random.seed(42)
     n = 1_000_000
 
@@ -255,9 +254,9 @@ def calcular_var_es_generales(returns):
 
         p = 1 - nivel
 
-        # --------------------------
+        
         # Paramétrico Normal
-        # --------------------------
+        
         var_normal = norm.ppf(p, loc=media, scale=desviacion)
         z = norm.ppf(p)
         es_normal = media - desviacion * (norm.pdf(z) / p)
@@ -271,9 +270,9 @@ def calcular_var_es_generales(returns):
             "ES/CVaR (%)": es_normal * 100
         })
 
-        # --------------------------
+        
         # Paramétrico T-Student
-        # --------------------------
+        
         q_t = stats.t.ppf(p, gl_t)
         var_t = stats.t.ppf(p, gl_t, loc=media, scale=desviacion)
 
@@ -291,9 +290,9 @@ def calcular_var_es_generales(returns):
             "ES/CVaR (%)": es_t * 100
         })
 
-        # --------------------------
+        
         # Histórico
-        # --------------------------
+        
         var_historico = returns.quantile(p)
         es_historico = returns[returns <= var_historico].mean()
 
@@ -306,9 +305,9 @@ def calcular_var_es_generales(returns):
             "ES/CVaR (%)": es_historico * 100
         })
 
-        # --------------------------
+        
         # Monte Carlo Normal
-        # --------------------------
+        
         var_mc_normal = np.percentile(simulacion_normal, p * 100)
         es_mc_normal = simulacion_normal[simulacion_normal <= var_mc_normal].mean()
 
@@ -321,9 +320,9 @@ def calcular_var_es_generales(returns):
             "ES/CVaR (%)": es_mc_normal * 100
         })
 
-        # --------------------------
+        
         # Monte Carlo T-Student
-        # --------------------------
+        
         var_mc_t = np.percentile(simulacion_t, p * 100)
         es_mc_t = simulacion_t[simulacion_t <= var_mc_t].mean()
 
@@ -393,9 +392,9 @@ def calcular_medidas_rolling(returns, window=252):
     return tabla_rolling
 
 
-# ============================================================
+
 # SIDEBAR
-# ============================================================
+
 
 acciones = {
     "Chubb Limited": "CB",
@@ -430,9 +429,7 @@ seccion = st.sidebar.radio(
 st.sidebar.markdown("---")
 st.sidebar.write(f"Ticker seleccionado: **{ticker}**")
 
-# ============================================================
 # DESCARGA Y CÁLCULOS BASE
-# ============================================================
 
 df, df_dia, precios, returns = descargar_datos(ticker)
 
@@ -446,9 +443,8 @@ desviacion_rend = returns.std()
 kurtosis_rend = kurtosis(returns)
 skewness_rend = skew(returns)
 
-# ============================================================
+
 # RESUMEN
-# ============================================================
 
 if seccion == "Resumen":
 
@@ -523,9 +519,8 @@ if seccion == "Resumen":
     c3.metric("Media rend.", f"{media_rend:.4%}")
     c4.metric("Volatilidad", f"{desviacion_rend:.4%}")
 
-# ============================================================
+
 # RENDIMIENTOS ÚLTIMOS 5 DÍAS
-# ============================================================
 
 elif seccion == "Rendimientos últimos 5 días":
 
@@ -552,9 +547,7 @@ elif seccion == "Rendimientos últimos 5 días":
 
     st.pyplot(fig)
 
-# ============================================================
 # MEDIDAS DE RIESGO
-# ============================================================
 
 elif seccion == "Medidas de riesgo":
 
@@ -574,9 +567,8 @@ elif seccion == "Medidas de riesgo":
 
     mostrar_tabla(tabla_medidas)
 
-# ============================================================
+
 # MÉTODOS GENERALES: VaR Y ES
-# ============================================================
 
 elif seccion == "VaR y CVaR - Métodos Generales":
 
@@ -616,9 +608,9 @@ elif seccion == "VaR y CVaR - Métodos Generales":
                 f"ES {fila['ES/CVaR (%)']:.4f}%"
             )
 
-# ============================================================
+
 # ROLLING WINDOWS
-# ============================================================
+
 
 elif seccion == "VaR y CVaR - Rolling Windows":
 
@@ -665,9 +657,8 @@ elif seccion == "VaR y CVaR - Rolling Windows":
 
     st.pyplot(fig)
 
-# ============================================================
+
 # COMPARACIÓN: VIOLACIONES
-# ============================================================
 
 elif seccion == "Comparación":
 
@@ -773,9 +764,8 @@ elif seccion == "Comparación":
 
     st.pyplot(fig)
 
-# ============================================================
+
 # VOLATILIDAD MÓVIL
-# ============================================================
 
 elif seccion == "Volatilidad Móvil":
 
