@@ -1,6 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import scipy.stats as stats
 from scipy.stats import kurtosis, skew, norm
@@ -294,7 +295,6 @@ if seccion == "Resumen":
 
     with col2:
         st.markdown('<div class="section-text">Cambio diario</div>', unsafe_allow_html=True)
-
         clase = "price-red" if cambio < 0 else "price-blue"
         signo = "+" if cambio > 0 else ""
 
@@ -394,24 +394,79 @@ elif seccion == "VaR y CVaR - Métodos Generales":
 
     gl = len(returns) - 1
 
+    # VaR paramétrico normal
     var_par_n_95 = norm.ppf(1 - 0.95, loc=media_rend, scale=desviacion_rend)
     var_par_n_99 = norm.ppf(1 - 0.99, loc=media_rend, scale=desviacion_rend)
     var_par_n_995 = norm.ppf(1 - 0.995, loc=media_rend, scale=desviacion_rend)
 
+    # VaR paramétrico T-Student
     var_par_t_95 = stats.t.ppf(1 - 0.95, gl, loc=media_rend, scale=desviacion_rend)
     var_par_t_99 = stats.t.ppf(1 - 0.99, gl, loc=media_rend, scale=desviacion_rend)
     var_par_t_995 = stats.t.ppf(1 - 0.995, gl, loc=media_rend, scale=desviacion_rend)
 
+    # Monte Carlo normal
+    n = 1000000
+
+    mu = float(media_rend)
+    sigma = float(desviacion_rend)
+
+    returns_normal = np.random.normal(mu, sigma, n)
+
+    var_monte_carlo_95 = np.percentile(returns_normal, 5)
+    var_monte_carlo_99 = np.percentile(returns_normal, 1)
+    var_monte_carlo_995 = np.percentile(returns_normal, 0.5)
+
+    # Monte Carlo T-Student
+    gl_mc = 5
+
+    returns_t = mu + sigma * np.random.standard_t(gl_mc, n)
+
+    var_monte_carlo_t_95 = np.percentile(returns_t, 5)
+    var_monte_carlo_t_99 = np.percentile(returns_t, 1)
+    var_monte_carlo_t_995 = np.percentile(returns_t, 0.5)
+
     tabla_var_general = pd.DataFrame({
-        "Método": ["Normal", "Normal", "Normal", "T-Student", "T-Student", "T-Student"],
-        "Nivel de confianza": ["95%", "99%", "99.5%", "95%", "99%", "99.5%"],
+        "Método": [
+            "Paramétrico Normal",
+            "Paramétrico Normal",
+            "Paramétrico Normal",
+            "Paramétrico T-Student",
+            "Paramétrico T-Student",
+            "Paramétrico T-Student",
+            "Monte Carlo Normal",
+            "Monte Carlo Normal",
+            "Monte Carlo Normal",
+            "Monte Carlo T-Student",
+            "Monte Carlo T-Student",
+            "Monte Carlo T-Student"
+        ],
+        "Nivel de confianza": [
+            "95%",
+            "99%",
+            "99.5%",
+            "95%",
+            "99%",
+            "99.5%",
+            "95%",
+            "99%",
+            "99.5%",
+            "95%",
+            "99%",
+            "99.5%"
+        ],
         "VaR": [
             var_par_n_95,
             var_par_n_99,
             var_par_n_995,
             var_par_t_95,
             var_par_t_99,
-            var_par_t_995
+            var_par_t_995,
+            var_monte_carlo_95,
+            var_monte_carlo_99,
+            var_monte_carlo_995,
+            var_monte_carlo_t_95,
+            var_monte_carlo_t_99,
+            var_monte_carlo_t_995
         ],
         "VaR (%)": [
             var_par_n_95 * 100,
@@ -419,22 +474,45 @@ elif seccion == "VaR y CVaR - Métodos Generales":
             var_par_n_995 * 100,
             var_par_t_95 * 100,
             var_par_t_99 * 100,
-            var_par_t_995 * 100
+            var_par_t_995 * 100,
+            var_monte_carlo_95 * 100,
+            var_monte_carlo_99 * 100,
+            var_monte_carlo_995 * 100,
+            var_monte_carlo_t_95 * 100,
+            var_monte_carlo_t_99 * 100,
+            var_monte_carlo_t_995 * 100
         ]
     })
 
-    col1, col2, col3 = st.columns(3)
+    st.markdown("### VaR Paramétrico Normal")
 
+    col1, col2, col3 = st.columns(3)
     col1.metric("VaR Normal 95%", f"{var_par_n_95 * 100:.4f}%")
     col2.metric("VaR Normal 99%", f"{var_par_n_99 * 100:.4f}%")
     col3.metric("VaR Normal 99.5%", f"{var_par_n_995 * 100:.4f}%")
 
-    col4, col5, col6 = st.columns(3)
+    st.markdown("### VaR Paramétrico T-Student")
 
+    col4, col5, col6 = st.columns(3)
     col4.metric("VaR T 95%", f"{var_par_t_95 * 100:.4f}%")
     col5.metric("VaR T 99%", f"{var_par_t_99 * 100:.4f}%")
     col6.metric("VaR T 99.5%", f"{var_par_t_995 * 100:.4f}%")
 
+    st.markdown("### VaR Monte Carlo Normal")
+
+    col7, col8, col9 = st.columns(3)
+    col7.metric("Monte Carlo Normal 95%", f"{var_monte_carlo_95 * 100:.4f}%")
+    col8.metric("Monte Carlo Normal 99%", f"{var_monte_carlo_99 * 100:.4f}%")
+    col9.metric("Monte Carlo Normal 99.5%", f"{var_monte_carlo_995 * 100:.4f}%")
+
+    st.markdown("### VaR Monte Carlo T-Student")
+
+    col10, col11, col12 = st.columns(3)
+    col10.metric("Monte Carlo T 95%", f"{var_monte_carlo_t_95 * 100:.4f}%")
+    col11.metric("Monte Carlo T 99%", f"{var_monte_carlo_t_99 * 100:.4f}%")
+    col12.metric("Monte Carlo T 99.5%", f"{var_monte_carlo_t_995 * 100:.4f}%")
+
+    st.markdown("### Tabla completa de métodos generales")
     mostrar_tabla(tabla_var_general)
 
 # =============================
