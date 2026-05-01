@@ -1,37 +1,138 @@
 ## README MÉTODOS
 Para el análisis de este proyecto nos centraremos en la compañía Chubb a pesar de haber colocado otras dos empresas
 
-Inciso a)
-El código descarga automáticamente información histórica del activo seleccionado desde Yahoo Finance, tomando datos diarios desde el año 2010. A partir de los precios de cierre ajustados, se construye la base principal que se usa en todo el proceso de cálculos.
-Inciso b)
-Con los precios descargados, el código calcula los rendimientos diarios del activo. Después obtiene medidas descriptivas básicas de la serie: media, desviación estándar, sesgo y exceso de curtosis, las cuales se muestran dentro de Streamlit.
-Para la acción de Chubb a día 1 de mayo se obtuvieron los siguientes resultados de los rendimientos:
-Media: 0.000638
-Esto indica que el rendimiento promedio diario es de 0.0638%, lo cual puede considerarse un rendimiento positivo moderado y consistente con un activo financiero estable en el largo plazo.
-Desviación estándar: 0.013799
-En términos porcentuales, equivale a aproximadamente 1.38% diario, lo que sugiere una volatilidad relativamente alta en comparación con la media. Esto implica que, aunque el rendimiento promedio es positivo, las fluctuaciones diarias pueden ser considerablemente mayores.
-Exceso de Curtosis: 11.17
-Este valor es significativamente mayor que cero, lo que indica que la distribución de los rendimientos presenta colas pesadas. En interpretación financiera, esto significa que existen mayores probabilidades de observar eventos extremos (grandes pérdidas o ganancias) en comparación con una distribución normal la cual tendría una curtosis de 3
-Sesgo: -0.4170
-El sesgo negativo indica que la distribución de los rendimientos está ligeramente inclinada hacia la izquierda, es decir, existe una mayor probabilidad de observar rendimientos negativos extremos que positivos. Esto es relevante notarlo en el análisis de riesgo, ya que sugiere mayor exposición a caídas fuertes.
-Inciso c)
-En este inciso el código calcula el VaR y el ES/CVaR para toda la serie completa de rendimientos diarios del activo seleccionado. Para ello, primero obtiene la media y la desviación estándar de los rendimientos, ya que estos parámetros son fundamentales en los métodos paramétricos. Para estos cálculos se utilizan las librerías NumPy y SciPy , que permiten trabajar con distribuciones de probabilidad y funciones estadísticas.
-Para los métodos paramétricos, el código estima el VaR y el ES/CVaR suponiendo dos distribuciones distintas: la distribución normal y la t-Student. En ambos casos, se utilizan funciones de la librería spicy.stats, como norm.ppf y t.ppf, para calcular los cuantiles correspondientes a los niveles de confianza 95%, 97.5% y 99%, considerando la cola izquierda (porque estamos viendo las pérdidas). El ES/CVaR se calcula utilizando fórmulas analíticas basadas en la densidad de cada distribución.
-Posteriormente, el código implementa el método histórico, en el cual no se asume ninguna distribución teórica. Aquí se utilizan funciones de Pandas que nos dan el cuantil para obtener directamente los cuantiles empíricos de los rendimientos observados, que representan el VaR. El ES/CVaR se calcula como el promedio de los rendimientos que se encuentran por debajo del VaR, capturando así el comportamiento de las pérdidas más extremas.
-Finalmente, se aplica una aproximación por Monte Carlo, utilizando la librería NumPy. En este proceso, el código genera una gran cantidad de simulaciones (En nuestro código 1,000,000) de rendimientos aleatorios. Para el caso normal, se usa np.random.normal, tomando como parámetros la media y desviación estándar de los datos reales. Para el caso t-Student, se generan valores con np.random.standard_t y posteriormente se escalan usando la media y desviación estándar.
-Una vez generadas las simulaciones, el VaR se calcula nuevamente como el percentil correspondiente de los rendimientos simulados , mientras que el ES/CVaR se obtiene como el promedio de los valores simulados que se encuentran por debajo del VaR. Este método permite aproximar la distribución de pérdidas sin depender completamente de supuestos teóricos, incorporando además mayor flexibilidad para modelar eventos extremos
-Análisis de resultados (Chubb):
+## Inciso a)
 
-En primer lugar, se observa que el VaR bajo distribución normal y Monte Carlo normal presentan resultados muy similares en todos los niveles de confianza (por ejemplo, alrededor de -2.2% al 95% y -3.14% al 99%). Esto es consistente, ya que ambos métodos asumen implícitamente una distribución normal de los rendimientos.
-Por otro lado, el modelo t-Student, tanto en su versión paramétrica como en Monte Carlo, tiende a generar valores más extremos, especialmente conforme aumenta el nivel de confianza. Esto se aprecia claramente en el caso del 99%, donde el VaR Monte Carlo t-Student alcanza aproximadamente -4.56%, siendo el más alto entre todos los métodos. Esto refleja la capacidad de esta distribución para capturar colas más pesadas.
-El método histórico presenta un comportamiento intermedio en el VaR, pero en el caso del ES/CVaR se vuelve considerablemente más conservador. Por ejemplo, al 97.5%, el ES histórico es cercano a -4.00%, superando a los métodos paramétricos. Esto indica que, aunque el VaR histórico no siempre es el más extremo, el ES sí captura pérdidas más severas cuando se presentan eventos negativos en los datos reales.
+El código descarga automáticamente información histórica del activo seleccionado desde **Yahoo Finance**, tomando datos diarios desde el año **2010**.  
+
+A partir de los precios de cierre ajustados, se construye la base principal que se usa en todo el proceso de cálculos.
+
+##  Inciso b)
+
+Con los precios descargados, el código calcula los rendimientos diarios del activo.  
+
+Después obtiene medidas descriptivas básicas de la serie:
+
+- Media  
+- Desviación estándar  
+- Sesgo  
+- Exceso de curtosis  
+
+las cuales se muestran dentro de Streamlit.
+
+###  Resultados para Chubb (01 de mayo)
+
+#### Media: 0.000638
+Esto indica que el rendimiento promedio diario es de **0.0638%**, lo cual puede considerarse un rendimiento positivo moderado y consistente con un activo financiero estable en el largo plazo.
+
+#### Desviación estándar: 0.013799
+En términos porcentuales, equivale a aproximadamente **1.38% diario**, lo que sugiere una volatilidad relativamente alta en comparación con la media.  
+
+Esto implica que, aunque el rendimiento promedio es positivo, las fluctuaciones diarias pueden ser considerablemente mayores.
+
+#### Exceso de Curtosis: 11.17
+Este valor es significativamente mayor que cero, lo que indica que la distribución de los rendimientos presenta **colas pesadas**.  
+
+En interpretación financiera, esto significa que existen mayores probabilidades de observar eventos extremos (grandes pérdidas o ganancias) en comparación con una distribución normal, la cual tendría una curtosis de 3.
+
+#### Sesgo: -0.4170
+El sesgo negativo indica que la distribución de los rendimientos está ligeramente inclinada hacia la izquierda, es decir, existe una mayor probabilidad de observar rendimientos negativos extremos que positivos.  
+
+Esto es relevante notarlo en el análisis de riesgo, ya que sugiere mayor exposición a caídas fuertes.
+
+
+##  Inciso c)
+
+En este inciso el código calcula el **VaR** y el **ES/CVaR** para toda la serie completa de rendimientos diarios del activo seleccionado.  
+
+Para ello, primero obtiene la media y la desviación estándar de los rendimientos, ya que estos parámetros son fundamentales en los métodos paramétricos.  
+
+Para estos cálculos se utilizan las librerías:
+
+- NumPy  
+- SciPy  
+
+que permiten trabajar con distribuciones de probabilidad y funciones estadísticas.
+
+---
+
+### Métodos paramétricos
+
+El código estima el VaR y el ES/CVaR suponiendo dos distribuciones distintas:
+
+- Distribución normal  
+- Distribución t-Student  
+
+En ambos casos, se utilizan funciones de la librería `scipy.stats`, como:
+
+- `norm.ppf`  
+- `t.ppf`  
+
+para calcular los cuantiles correspondientes a los niveles de confianza **95%, 97.5% y 99%**, considerando la cola izquierda (porque estamos viendo las pérdidas).  
+
+El ES/CVaR se calcula utilizando fórmulas analíticas basadas en la densidad de cada distribución.
+
+---
+
+### Método histórico
+
+Posteriormente, el código implementa el método histórico, en el cual no se asume ninguna distribución teórica.  
+
+Aquí se utilizan funciones de **Pandas** que nos dan el cuantil para obtener directamente los cuantiles empíricos de los rendimientos observados, que representan el VaR.  
+
+El ES/CVaR se calcula como el promedio de los rendimientos que se encuentran por debajo del VaR, capturando así el comportamiento de las pérdidas más extremas.
+
+---
+
+### Método Monte Carlo
+
+Finalmente, se aplica una aproximación por Monte Carlo, utilizando la librería **NumPy**.  
+
+En este proceso, el código genera una gran cantidad de simulaciones (en nuestro código **1,000,000**) de rendimientos aleatorios.
+
+- Para el caso normal, se usa `np.random.normal`, tomando como parámetros la media y desviación estándar de los datos reales.  
+- Para el caso t-Student, se generan valores con `np.random.standard_t` y posteriormente se escalan usando la media y desviación estándar.
+
+Una vez generadas las simulaciones:
+
+- El VaR se calcula nuevamente como el percentil correspondiente de los rendimientos simulados.  
+- El ES/CVaR se obtiene como el promedio de los valores simulados que se encuentran por debajo del VaR.  
+
+Este método permite aproximar la distribución de pérdidas sin depender completamente de supuestos teóricos, incorporando además mayor flexibilidad para modelar eventos extremos.
+
+---
+
+## Análisis de resultados (Chubb)
+
+En primer lugar, se observa que el VaR bajo distribución normal y Monte Carlo normal presentan resultados muy similares en todos los niveles de confianza (por ejemplo, alrededor de **-2.2% al 95%** y **-3.14% al 99%**).  
+
+Esto es consistente, ya que ambos métodos asumen implícitamente una distribución normal de los rendimientos.
+
+Por otro lado, el modelo t-Student, tanto en su versión paramétrica como en Monte Carlo, tiende a generar valores más extremos, especialmente conforme aumenta el nivel de confianza.  
+
+Esto se aprecia claramente en el caso del **99%**, donde el VaR Monte Carlo t-Student alcanza aproximadamente **-4.56%**, siendo el más alto entre todos los métodos.  
+
+Esto refleja la capacidad de esta distribución para capturar colas más pesadas.
+
+El método histórico presenta un comportamiento intermedio en el VaR, pero en el caso del ES/CVaR se vuelve considerablemente más conservador.  
+
+Por ejemplo, al **97.5%**, el ES histórico es cercano a **-4.00%**, superando a los métodos paramétricos.  
+
+Esto indica que, aunque el VaR histórico no siempre es el más extremo, el ES sí captura pérdidas más severas cuando se presentan eventos negativos en los datos reales.
+
 Adicionalmente, se cumple que en todos los casos el ES/CVaR es más negativo que el VaR, lo cual es esperado, ya que el ES mide la pérdida promedio en los peores escenarios y no solo un percentil específico.
-Finalmente, se observa que conforme aumenta el nivel de confianza (de 95% a 99%), tanto el VaR como el ES se vuelven más negativos en todos los métodos, lo que refleja un incremento en la severidad de las pérdidas extremas consideradas.
-En conjunto, los resultados muestran que los métodos que consideran colas pesadas o datos históricos (t-Student y método histórico) tienden a ofrecer estimaciones de riesgo más conservadoras, mientras que la aproximación normal tiende a subestimar el riesgo en presencia de eventos extremos.
+
+Finalmente, se observa que conforme aumenta el nivel de confianza (de **95% a 99%**), tanto el VaR como el ES se vuelven más negativos en todos los métodos, lo que refleja un incremento en la severidad de las pérdidas extremas consideradas.
+
+---
+
+### Conclusión
+
+En conjunto, los resultados muestran que los métodos que consideran **colas pesadas o datos históricos** (t-Student y método histórico) tienden a ofrecer estimaciones de riesgo más conservadoras, mientras que la aproximación normal tiende a subestimar el riesgo en presencia de eventos extremos.
 
 
 
-INCISO D)
+##  Inciso d)
 
 Descripción del código 
 El presente código implementa el cálculo y análisis de medidas de riesgo financiero a partir de una serie de rendimientos, específicamente el Value at Risk (VaR) y el Expected Shortfall (ES o CVaR), utilizando tanto enfoques paramétricos como históricos bajo un esquema de ventanas móviles de 252 observaciones.
@@ -44,7 +145,7 @@ El método .squeeze() permite transformar la estructura en una Serie de pandas, 
 Posteriormente, se calculan la media y la desviación estándar móviles utilizando ventanas de tamaño 252, lo que corresponde aproximadamente a un año de datos bursátiles. Estas estadísticas móviles permiten capturar la evolución temporal del comportamiento de los rendimientos y, por lo tanto, del riesgo.
 
 
-VaR paramétrico
+### VaR paramétrico
 
 El VaR paramétrico se calcula bajo el supuesto de que los rendimientos siguen una distribución normal. En este caso, el VaR se obtiene mediante:
 
@@ -57,7 +158,7 @@ z_alpha = Phi^{-1}(1 - alpha)
 En el código, esto se implementa mediante la función norm.ppf, la cual calcula el cuantil correspondiente dado el nivel de confianza, la media y la desviación estándar móviles.
 
 
-VaR histórico
+### VaR histórico
 
 El VaR histórico no asume ninguna distribución, sino que utiliza directamente los cuantiles empíricos:
 
@@ -66,7 +167,7 @@ VaR_alpha = cuantil empírico de nivel (1 - alpha)
 Esto permite capturar características reales de los datos como asimetría y colas pesadas.
 
 
-Expected Shortfall (ES / CVaR)
+### Expected Shortfall (ES / CVaR)
 
 El ES mide la pérdida promedio en los peores escenarios, es decir, aquellos en los que se supera el VaR.
 
@@ -120,9 +221,6 @@ Por lo tanto:
 
 R_t = mu_t + sigma_t * Z
 
-
-Cuantiles de la normal estándar
-
 Se calculan los valores:
 
 z_95 = norm.ppf(1 - 0.95)  
@@ -152,7 +250,7 @@ media_movil - desviacion_movil * (norm.pdf(z_alpha) / (1 - alpha))
 Esto evita calcular la integral directamente y utiliza el resultado analítico.
 
 
- ES histórico
+ ### ES histórico
 
 El ES histórico se calcula directamente a partir de los datos. Para cada ventana móvil:
 
@@ -166,7 +264,7 @@ x[x <= x.quantile(1 - alpha)].mean()
 Este método no asume ninguna distribución y refleja directamente el comportamiento de los datos.
 
 
-## Visualización
+### Visualización
 
 El código genera una gráfica que incluye:
 
@@ -178,7 +276,7 @@ El código genera una gráfica que incluye:
 
 Esto permite comparar el comportamiento de las distintas metodologías y observar cómo evoluciona el riesgo en el tiempo.
 
-# Análisis de resultados
+### Análisis de resultados
 
 El código genera como salida principal una serie de tablas que muestran los valores más recientes de las medidas de riesgo calculadas. En particular, se presentan los últimos valores del VaR y del ES (tanto paramétricos como históricos), los cuales se obtienen a partir de ventanas móviles de 252 observaciones. Esto implica que cada estimación refleja el comportamiento del riesgo considerando aproximadamente un año de información previa.
 
@@ -207,9 +305,9 @@ Finalmente, se observa que el ES es consistentemente más conservador que el VaR
 
 En conclusión, el uso conjunto de estas medidas permite obtener una visión más completa del riesgo, combinando estabilidad en la estimación con sensibilidad ante eventos extremos.
 
-INCISO E)
+## Inciso e)
 
-Descripción del código 
+### Descripción del código 
 El presente código implementa el análisis de violaciones de medidas de riesgo financiero, específicamente del Value at Risk (VaR) y del Expected Shortfall (ES o CVaR), tanto bajo enfoques paramétricos como históricos.
 A partir de los resultados previamente calculados (VaR y ES móviles), se construye un DataFrame que integra los rendimientos diarios junto con las distintas medidas de riesgo, todo expresado en porcentaje. Esto permite comparar directamente los valores observados con los umbrales de riesgo estimados.
 Posteriormente, se identifica en qué momentos los rendimientos reales superan (en términos negativos) las medidas de riesgo, lo cual se conoce como violación.
@@ -271,8 +369,11 @@ Conclusión
 El análisis de violaciones es una herramienta fundamental para validar modelos de riesgo, ya que permite comparar las pérdidas reales con las estimaciones teóricas.
 A través de este código, se observa cómo distintas metodologías (paramétrica e histórica) presentan comportamientos diferentes frente a eventos extremos. Mientras que el enfoque paramétrico ofrece mayor estabilidad, el enfoque histórico captura mejor las colas de la distribución.
 Finalmente, el uso conjunto de estas métricas proporciona una visión más completa del riesgo, permitiendo identificar tanto la frecuencia como la severidad de las pérdidas extremas.
-INCISO F)
-## Descripción del Código
+
+
+
+## Inciso f)
+### Descripción del Código
 Este inciso detalla la metodología y el análisis de resultados para la estimación del Valor en Riesgo (VaR) de la acción Chubb Limited (CB). El enfoque principal utiliza un modelo paramétrico adaptativo basado en una ventana móvil de un año bursátil.
 1. Preparación de la Serie de Tiempo
 El código inicia estructurando los rendimientos en un DataFrame específico para el análisis de riesgo:
