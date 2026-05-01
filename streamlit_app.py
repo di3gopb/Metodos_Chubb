@@ -289,19 +289,24 @@ if seccion == "Resumen":
     col1, col2, col3 = st.columns([1.2, 1, 1])
 
     with col1:
+        st.markdown('<div class="section-text">Precio actual</div>', unsafe_allow_html=True)
         st.markdown(f'<span class="price-main">{precio_actual:.2f}</span>', unsafe_allow_html=True)
 
     with col2:
+        st.markdown('<div class="section-text">Cambio diario</div>', unsafe_allow_html=True)
+
         clase = "price-red" if cambio < 0 else "price-blue"
         signo = "+" if cambio > 0 else ""
+
         st.markdown(
             f'<span class="{clase}">{signo}{cambio:.2f} ({signo}{cambio_pct:.2%})</span>',
             unsafe_allow_html=True
         )
 
     with col3:
+        st.markdown('<div class="section-text">Estado del dato</div>', unsafe_allow_html=True)
         st.markdown(
-            '<div class="section-text">Último precio disponible</div>',
+            '<div class="section-text" style="font-size: 22px; font-weight: 700;">Último precio disponible</div>',
             unsafe_allow_html=True
         )
 
