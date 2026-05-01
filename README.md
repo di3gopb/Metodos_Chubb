@@ -6,7 +6,8 @@ INCISO B)
 # INCISO C)
 
 # INCISO D)
-Descripción del código 
+# Descripción del código 
+
 El presente código implementa el cálculo y análisis de medidas de riesgo financiero a partir de una serie de rendimientos, específicamente el Value at Risk (VaR) y el Expected Shortfall (ES o CVaR), utilizando tanto enfoques paramétricos como históricos bajo un esquema de ventanas móviles de 252 observaciones.
 
 A partir del DataFrame generado previamente, se extrae la columna correspondiente a los rendimientos mediante:
@@ -17,7 +18,7 @@ El método .squeeze() permite transformar la estructura en una Serie de pandas, 
 Posteriormente, se calculan la media y la desviación estándar móviles utilizando ventanas de tamaño 252, lo que corresponde aproximadamente a un año de datos bursátiles. Estas estadísticas móviles permiten capturar la evolución temporal del comportamiento de los rendimientos y, por lo tanto, del riesgo.
 
 
-VaR paramétrico
+# VaR paramétrico
 
 El VaR paramétrico se calcula bajo el supuesto de que los rendimientos siguen una distribución normal. En este caso, el VaR se obtiene mediante:
 
@@ -30,7 +31,7 @@ z_alpha = Phi^{-1}(1 - alpha)
 En el código, esto se implementa mediante la función norm.ppf, la cual calcula el cuantil correspondiente dado el nivel de confianza, la media y la desviación estándar móviles.
 
 
-VaR histórico
+# VaR histórico
 
 El VaR histórico no asume ninguna distribución, sino que utiliza directamente los cuantiles empíricos:
 
@@ -39,12 +40,9 @@ VaR_alpha = cuantil empírico de nivel (1 - alpha)
 Esto permite capturar características reales de los datos como asimetría y colas pesadas.
 
 
-Expected Shortfall (ES / CVaR)
+# Expected Shortfall (ES / CVaR)
 
 El ES mide la pérdida promedio en los peores escenarios, es decir, aquellos en los que se supera el VaR.
-
-
-Definición como esperanza condicional
 
 El ES puede definirse como:
 
@@ -76,8 +74,6 @@ Por ejemplo:
 - Para alpha = 0.95 → se usa el cuantil 0.05
 - Para alpha = 0.99 → se usa el cuantil 0.01
 
-
-Supuesto de normalidad
 
 Para el enfoque paramétrico se asume que los rendimientos siguen una distribución normal:
 
@@ -113,10 +109,6 @@ Estos representan cuantiles de la normal estándar en la cola izquierda:
 
 Estos valores indican cuántas desviaciones estándar por debajo de la media se encuentran los eventos extremos.
 
-
-
-Fórmula cerrada del ES paramétrico
-
 Bajo el supuesto de normalidad, la expresión integral del ES puede resolverse analíticamente, obteniendo:
 
 ES_alpha = mu - sigma * (phi(z_alpha) / (1 - alpha))
@@ -147,7 +139,7 @@ x[x <= x.quantile(1 - alpha)].mean()
 Este método no asume ninguna distribución y refleja directamente el comportamiento de los datos.
 
 
-## Visualización
+# Visualización
 
 El código genera una gráfica que incluye:
 
